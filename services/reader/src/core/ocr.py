@@ -90,11 +90,3 @@ class OCR:
         )
 
         return await self.process(signed_url.url, model, include_image_base64)
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    ocr = OCR()
-    result = asyncio.run(ocr.process(url="https://arxiv.org/pdf/1810.08575"))
-    print(json.dumps(result, indent=4)[:2000])

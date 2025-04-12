@@ -3,16 +3,19 @@ from src.config import MODEL_NAME
 from src.core.llm import LLM
 
 
+@pytest.fixture
+def llm():
+    return LLM(MODEL_NAME)
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_llm_call_standalone():
+async def test_llm_call_standalone(llm):
     """
     Integration test for LLM class that tests actual communication with Ollama.
 
     This test requires Ollama to be running with the specified model available.
     """
-    # Create LLM instance
-    llm = LLM(MODEL_NAME)
 
     # Call the method
     test_prompt = "Return only the word 'TEST'"
@@ -25,14 +28,12 @@ async def test_llm_call_standalone():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_llm_call_chat():
+async def test_llm_call_chat(llm):
     """
     Integration test for LLM class that tests actual communication with Ollama.
 
     This test requires Ollama to be running with the specified model available.
     """
-    # Create LLM instance
-    llm = LLM(MODEL_NAME)
 
     # Call the method
     test_messages = [{"role": "user", "content": 'Response with "TEST"'}]
