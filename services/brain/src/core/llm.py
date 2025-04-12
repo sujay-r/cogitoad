@@ -18,20 +18,3 @@ class LLM:
         ), f"LLM chat response is None. Input messages: {messages}"
 
         return response_content
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    from ..config import MODEL_NAME
-
-    llm = LLM(MODEL_NAME)
-    messages = [
-        {"role": "system", "content": "Enable deep thinking subroutine."},
-        {
-            "role": "user",
-            "content": "What is the significance of complex numbers in game development?",
-        },
-    ]
-
-    print(asyncio.run(llm._call_chat(messages)))
