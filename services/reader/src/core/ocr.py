@@ -20,6 +20,9 @@ class OCR:
             )
         self.client = Mistral(api_key=self.api_key)
 
+    def _parse_ocr_response_to_markdown_str(self, ocr_response: Dict[str, Any]) -> str:
+        return "".join([page["markdown"] for page in ocr_response["pages"]])
+
     async def process(
         self,
         url: str,
@@ -45,7 +48,7 @@ class OCR:
 
         return json.loads(ocr_response.model_dump_json())
 
-    async def _upload_document(self, file_path: Union[str, Path]) -> str:
+    async def _upload_document(self, file_name: str, file_bytes: bytes) -> str:
         """
         Upload a document to Mistral.
 
@@ -55,16 +58,16 @@ class OCR:
         Returns:
             ID of the uploaded file
         """
-        file_path = Path(file_path)
         uploaded_file = await self.client.files.upload_async(
-            file={"file_name": file_path.stem, "content": file_path.read_bytes()},
+            file={"file_name": file_name, "content": file_bytes},
             purpose="ocr",
         )
         return uploaded_file.id
 
-    async def process_file(
+    async def process_file_bytes(
         self,
-        file_path: Union[str, Path],
+        file_name: str,
+        file_bytes: bytes,
         model: Optional[str] = OCR_MODEL,
         include_image_base64: Optional[bool] = True,
         url_expiry_hours: Optional[int] = 1,
@@ -82,7 +85,7 @@ class OCR:
         Returns:
             Dictionary containing the OCR response
         """
-        uploaded_file_id = await self._upload_document(file_path)
+        uploaded_file_id = await self._upload_document(file_name, file_bytes)
 
         # Get a signed URL
         signed_url = self.client.files.get_signed_url(
@@ -90,3 +93,49 @@ class OCR:
         )
 
         return await self.process(signed_url.url, model, include_image_base64)
+
+    async def process_file_from_path(
+        self, file_path: Union[str, Path], **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Read a file from the given path and run OCR on it.
+
+        Args:
+            file_path (Union[str, Path]): Path to the file
+
+        Returns:
+            dict: OCR output for the given file
+        """
+        file_path = Path(file_path)
+        file_name = file_path.stem
+        file_bytes = file_path.read_bytes()
+
+        return await self.process_file_bytes(file_name, file_bytes, **kwargs)
+
+    async def get_markdown_from_url(self, url: str, **kwargs) -> str:
+        ocr_response = await self.process(url, **kwargs)
+        return self._parse_ocr_response_to_markdown_str(ocr_response)
+
+    async def get_markdown_from_file_bytes(
+        self, file_name: str, file_bytes: bytes, **kwargs
+    ) -> str:
+        ocr_response = await self.process_file_bytes(file_name, file_bytes, **kwargs)
+        return self._parse_ocr_response_to_markdown_str(ocr_response)
+
+    async def get_markdown_from_file_path(
+        self, file_path: Union[str, Path], **kwargs
+    ) -> str:
+        ocr_response = await self.process_file_from_path(file_path, **kwargs)
+        return self._parse_ocr_response_to_markdown_str(ocr_response)
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    ocr = OCR()
+    result = asyncio.run(
+        ocr.get_markdown_from_url(
+            "https://cognitionandculture.net/wp-content/uploads/10.1.1.69.4147.pdf"
+        )
+    )
+    print(result)
