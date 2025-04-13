@@ -12,7 +12,7 @@ class MCPClient:
         self.server_params = server_params
         self.exit_stack = AsyncExitStack()
 
-    async def _connect_to_server(self):
+    async def _connect_to_server(self, debug: bool = False):
         stdio_transport = await self.exit_stack.enter_async_context(
             stdio_client(self.server_params)
         )
@@ -27,9 +27,15 @@ class MCPClient:
         logger.info(f"Connected to MCP server.")
         logger.info(f"List of available tools: {response.tools}")
 
+        if debug:
+            await self._close_connection()
+
+    async def _close_connection(self):
+        await self.exit_stack.aclose()
+
 
 if __name__ == "__main__":
     import asyncio
 
     mcp_client = MCPClient(READER_MCP_SERVER_PARAMS)
-    asyncio.run(mcp_client._connect_to_server())
+    asyncio.run(mcp_client._connect_to_server(debug=True))
