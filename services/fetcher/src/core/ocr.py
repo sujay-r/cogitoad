@@ -127,15 +127,3 @@ class OCR:
     ) -> str:
         ocr_response = await self.process_file_from_path(file_path, **kwargs)
         return self._parse_ocr_response_to_markdown_str(ocr_response)
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    ocr = OCR()
-    result = asyncio.run(
-        ocr.get_markdown_from_url(
-            "https://cognitionandculture.net/wp-content/uploads/10.1.1.69.4147.pdf"
-        )
-    )
-    print(result)
