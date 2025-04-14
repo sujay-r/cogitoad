@@ -5,7 +5,7 @@ from loguru import logger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from ..config import READER_MCP_SERVER_PARAMS
+from ..config import FETCHER_MCP_SERVER_PARAMS
 
 
 class MCPClient:
@@ -47,7 +47,7 @@ class MCPClient:
 
 
 async def test():
-    async with MCPClient(READER_MCP_SERVER_PARAMS) as mcp_client:
+    async with MCPClient(FETCHER_MCP_SERVER_PARAMS) as mcp_client:
         tool_result = await mcp_client.call_tool(
             tool_name="get_contents_from_document_link",
             url="https://arxiv.org/pdf/1810.08575",

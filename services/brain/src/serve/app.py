@@ -1,84 +1,108 @@
-import time
-from typing import Optional
+from typing import Optional, TypedDict
 
-import streamlit as st
+import gradio as gr
+from loguru import logger
 
-# Set page configuration
-st.set_page_config(page_title="Cogitoad")
-
-# Initialize session state variables if they don't exist
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "document_content" not in st.session_state:
-    st.session_state.document_content = None
-if "document_name" not in st.session_state:
-    st.session_state.document_name = None
-if "parsed_document" not in st.session_state:
-    st.session_state.parsed_document = None
+from ..config import FETCHER_MCP_SERVER_PARAMS, MODEL_NAME
+from ..core.llm import LLM
+from .mcp import MCPClient
 
 
-def process_uploaded_file(uploaded_file) -> Optional[str]:
-    pass
+class State(TypedDict):
+    document_content: Optional[str]
+    document_name: Optional[str]
+    parsed_document: Optional[str]
+    all_tools: Optional[list]
 
 
-def get_ai_response(user_query: str, document_content: Optional[str]) -> str:
-    """Generate AI response based on user query and document content"""
-    # This is a placeholder. In a real app, you would call your AI model here.
-    time.sleep(1)  # Simulate processing time
+state: State = {
+    "document_content": None,
+    "document_name": None,
+    "parsed_document": None,
+    "all_tools": None,
+}
+llm = LLM(MODEL_NAME)
+mcp_client = MCPClient(FETCHER_MCP_SERVER_PARAMS)
 
-    if document_content:
-        return f"I've analyzed the document and found relevant information about '{user_query}'. The document contains {len(document_content)} characters."
+
+async def setup_mcp_client():
+    await mcp_client._connect_to_server()
+    all_tools = await mcp_client.get_all_tools()
+    state["all_tools"] = [
+        {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.inputSchema,
+            },
+        }
+        for tool in all_tools
+    ]
+    logger.info("Loaded tools from MCP server")
+
+
+async def cleanup_mcp_client():
+    await mcp_client._cleanup_resources()
+
+
+def user(message, chat_history):
+    return "", chat_history + [{"role": "user", "content": message}]
+
+
+async def handle_tool_calls(chat_history, tool_calls):
+    logger.info(f"LLM called following tools: {tool_calls}")
+    for tool_call in tool_calls:
+        tool_response = await mcp_client.call_tool(
+            tool_call.function.name, **tool_call.function.arguments
+        )
+        chat_history.append({"role": "tool", "content": tool_response[0].text})
+
+    logger.info("Calling LLM again with tool outputs..")
+    ai_response_to_tool_outputs = await llm.chat(chat_history)
+    chat_history.append(
+        {"role": "assistant", "content": ai_response_to_tool_outputs.content}
+    )
+    return chat_history
+
+
+async def bot(chat_history):
+    logger.info("Calling LLM")
+    ai_response = await llm.chat(chat_history, state["all_tools"])
+    if ai_response.tool_calls:
+        chat_history = await handle_tool_calls(chat_history, ai_response.tool_calls)
     else:
-        return f"I understand you're asking about '{user_query}', but no document has been uploaded yet for reference."
+        chat_history.append({"role": "assistant", "content": ai_response.content})
+
+    return chat_history
 
 
-# Sidebar for document upload
-with st.sidebar:
-    st.title("Document Upload")
-    uploaded_file = st.file_uploader(
-        "Upload a document or image", type=["pdf", "png", "jpg", "jpeg", "txt", "csv"]
+async def stream_bot(chat_history):
+    chat_history.append({"role": "assistant", "content": ""})
+    async for chunk in llm.stream_chat(chat_history, state["all_tools"]):
+        chat_history[-1]["content"] += chunk
+        yield chat_history
+
+
+with gr.Blocks(title="Cogitoad") as gradio_app:
+    gradio_app.load(setup_mcp_client)
+    gr.Markdown("# Cogitoad")
+
+    chatbot = gr.Chatbot(
+        value=[{"role": "system", "content": "Enable deep thinking subroutine"}],
+        type="messages",
+    )
+    msg = gr.Textbox(
+        label="Ask a question",
+        placeholder="Type your question here...",
+        lines=1,
     )
 
-    if uploaded_file and uploaded_file.name != st.session_state.document_name:
-        with st.spinner("Processing document..."):
-            document_content = process_uploaded_file(uploaded_file)
-            if document_content:
-                st.session_state.document_content = document_content
-                st.session_state.document_name = uploaded_file.name
-                st.success(f"Successfully processed: {uploaded_file.name}")
-            else:
-                st.error("Failed to extract content from the document")
+    # Handle chat submission
+    msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
+        bot, chatbot, chatbot
+    )
 
-    if st.session_state.document_name:
-        st.info(f"Current document: {st.session_state.document_name}")
-        if st.button("Clear document"):
-            st.session_state.document_content = None
-            st.session_state.document_name = None
-            st.rerun()
 
-# Main chat interface
-st.title("Cogitoad")
-
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
-
-# Chat input
-user_input = st.chat_input("Ask a question")
-if user_input:
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": user_input})
-
-    # Display user message
-    with st.chat_message("user"):
-        st.write(user_input)
-
-    # Generate AI response
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            response = get_ai_response(user_input, st.session_state.document_content)
-            st.write(response)
-
-    # Add assistant response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response})
+if __name__ == "__main__":
+    gradio_app.launch()
