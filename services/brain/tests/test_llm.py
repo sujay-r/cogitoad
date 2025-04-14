@@ -19,7 +19,7 @@ async def test_llm_call_standalone(llm):
 
     # Call the method
     test_prompt = "Return only the word 'TEST'"
-    response = await llm._call_standalone(test_prompt)
+    response = await llm.call_standalone(test_prompt)
 
     # Verify we got some kind of response
     assert isinstance(response, str)
@@ -37,7 +37,7 @@ async def test_llm_call_chat(llm):
 
     # Call the method
     test_messages = [{"role": "user", "content": 'Response with "TEST"'}]
-    response = await llm._call_chat(test_messages)
+    response = await llm.chat(test_messages)
 
     # Verify we got some kind of response
     assert isinstance(response, str)
