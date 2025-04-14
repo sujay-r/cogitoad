@@ -13,7 +13,7 @@ class MCPClient:
         self.server_params = server_params
         self.exit_stack = AsyncExitStack()
 
-    async def __aenter__(self) -> "MCPClient":
+    async def _connect_to_server(self):
         stdio_transport = await self.exit_stack.enter_async_context(
             stdio_client(self.server_params)
         )
@@ -25,10 +25,15 @@ class MCPClient:
         await self.session.initialize()
         logger.info(f"Connected to MCP server.")
 
+    async def _cleanup_resources(self):
+        await self.exit_stack.aclose()
+
+    async def __aenter__(self) -> "MCPClient":
+        await self._connect_to_server()
         return self
 
     async def __aexit__(self, exc_type, exc_value, exc_tb) -> None:
-        await self.exit_stack.aclose()
+        await self._cleanup_resources()
 
     async def get_all_tools(self) -> list:
         response = await self.session.list_tools()
