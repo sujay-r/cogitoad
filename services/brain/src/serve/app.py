@@ -71,7 +71,7 @@ async def process_tool_calls(chat_history, tool_calls):
         tool_response = await mcp_client.call_tool(
             tool_call.function.name, **tool_call.function.arguments
         )
-        chat_history.append({"role": "tool", "content": tool_response[0].text[:2000]})
+        chat_history.append({"role": "tool", "content": tool_response[0].text[:4000]})
 
     logger.info("Calling LLM with tool outputs..")
     ai_response_to_tool_outputs = await llm.chat(chat_history)
@@ -95,7 +95,9 @@ async def bot(chat_history):
         logger.info(f"LLM response after calling tools: {ai_final_response['content']}")
         chat_history.append(ai_final_response)
     else:
-        chat_history.append({"role": "assistant", "content": ai_response.content})
+        assert ai_response.content is not None
+        ai_resposne_cleaned = remove_think_block(ai_response.content)
+        chat_history.append({"role": "assistant", "content": ai_resposne_cleaned})
 
     return chat_history
 
