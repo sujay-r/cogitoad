@@ -20,7 +20,7 @@ async def get_contents_from_document_link(url: str):
     Returns:
         str: Markdown contents of the document.
     """
-    return ocr.get_markdown_from_url(url)
+    return await ocr.get_markdown_from_url(url)
 
 
 @mcp.tool()
@@ -34,7 +34,7 @@ async def get_contents_from_document_bytes(filename: str, file_bytes: bytes):
     Returns:
         str: Markdown contents of the document.
     """
-    return ocr.get_markdown_from_file_bytes(filename, file_bytes)
+    return await ocr.get_markdown_from_file_bytes(filename, file_bytes)
 
 
 @mcp.tool()
