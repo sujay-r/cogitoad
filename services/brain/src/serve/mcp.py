@@ -13,7 +13,7 @@ class MCPClient:
         self.server_params = server_params
         self.exit_stack = AsyncExitStack()
 
-    async def establish_connection(self, debug: bool = False) -> None:
+    async def __aenter__(self) -> "MCPClient":
         stdio_transport = await self.exit_stack.enter_async_context(
             stdio_client(self.server_params)
         )
@@ -23,32 +23,31 @@ class MCPClient:
         )
 
         await self.session.initialize()
-
         logger.info(f"Connected to MCP server.")
 
-        if debug:
-            await self.close_connection()
+        return self
 
-    async def close_connection(self):
+    async def __aexit__(self, exc_type, exc_value, exc_tb) -> None:
         await self.exit_stack.aclose()
 
     async def get_all_tools(self) -> list:
         response = await self.session.list_tools()
         return response.tools
 
-    async def call_tool(self, tool_name: str, *args) -> Any:
-        logger.info(f"Calling tool {tool_name} with arguments: {args}")
-        result = await self.session.call_tool(tool_name, *args)
+    async def call_tool(self, tool_name: str, **kwargs) -> Any:
+        logger.info(f"Calling tool {tool_name} with arguments: {kwargs}")
+        result = await self.session.call_tool(tool_name, kwargs)
         logger.info(f"Tool response: {result.content}")
         return result.content
 
 
 async def test():
-    mcp_client = MCPClient(READER_MCP_SERVER_PARAMS)
-    await mcp_client.establish_connection()
-    all_tools = await mcp_client.get_all_tools()
-    print(all_tools)
-    await mcp_client.close_connection()
+    async with MCPClient(READER_MCP_SERVER_PARAMS) as mcp_client:
+        tool_result = await mcp_client.call_tool(
+            tool_name="get_contents_from_document_link",
+            url="https://arxiv.org/pdf/1810.08575",
+        )
+        print(tool_result)
 
 
 if __name__ == "__main__":
