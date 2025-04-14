@@ -1,3 +1,6 @@
+import json
+import re
+from copy import deepcopy
 from typing import Optional, TypedDict
 
 import gradio as gr
@@ -9,6 +12,7 @@ from .mcp import MCPClient
 
 
 class State(TypedDict):
+    chat_history: list
     document_content: Optional[str]
     document_name: Optional[str]
     parsed_document: Optional[str]
@@ -16,6 +20,12 @@ class State(TypedDict):
 
 
 state: State = {
+    "chat_history": [
+        {
+            "role": "system",
+            "content": "Enable deep thinking subroutine.\nYou are Cogitoad, an intelligent assistant that has the ability to acccess information using tools. The user will make small talk with you or ask you questions about some documents. Your task is to answer the user's questions to the best of your ability and use the tools at your disposal appropriately to give the most accurate answer to the user.",
+        }
+    ],
     "document_content": None,
     "document_name": None,
     "parsed_document": None,
@@ -46,31 +56,44 @@ async def cleanup_mcp_client():
     await mcp_client._cleanup_resources()
 
 
+def remove_think_block(message: str) -> str:
+    return re.sub(r"<think>.*?</think>", "", message, flags=re.DOTALL).strip()
+
+
 def user(message, chat_history):
     return "", chat_history + [{"role": "user", "content": message}]
 
 
-async def handle_tool_calls(chat_history, tool_calls):
+async def process_tool_calls(chat_history, tool_calls):
+    chat_history = deepcopy(chat_history)
     logger.info(f"LLM called following tools: {tool_calls}")
     for tool_call in tool_calls:
         tool_response = await mcp_client.call_tool(
             tool_call.function.name, **tool_call.function.arguments
         )
-        chat_history.append({"role": "tool", "content": tool_response[0].text})
+        chat_history.append({"role": "tool", "content": tool_response[0].text[:2000]})
 
-    logger.info("Calling LLM again with tool outputs..")
+    logger.info("Calling LLM with tool outputs..")
     ai_response_to_tool_outputs = await llm.chat(chat_history)
-    chat_history.append(
-        {"role": "assistant", "content": ai_response_to_tool_outputs.content}
-    )
-    return chat_history
+    assert ai_response_to_tool_outputs.content is not None
+    ai_response_clean = remove_think_block(
+        ai_response_to_tool_outputs.content
+    )  # HACK: I need the thought process to show on the UI later
+    return {"role": "assistant", "content": ai_response_clean}
 
 
 async def bot(chat_history):
     logger.info("Calling LLM")
+
     ai_response = await llm.chat(chat_history, state["all_tools"])
+    logger.info(f"LLM response: {ai_response}")
+
     if ai_response.tool_calls:
-        chat_history = await handle_tool_calls(chat_history, ai_response.tool_calls)
+        ai_final_response = await process_tool_calls(
+            chat_history, ai_response.tool_calls
+        )
+        logger.info(f"LLM response after calling tools: {ai_final_response['content']}")
+        chat_history.append(ai_final_response)
     else:
         chat_history.append({"role": "assistant", "content": ai_response.content})
 
@@ -89,8 +112,7 @@ with gr.Blocks(title="Cogitoad") as gradio_app:
     gr.Markdown("# Cogitoad")
 
     chatbot = gr.Chatbot(
-        value=[{"role": "system", "content": "Enable deep thinking subroutine"}],
-        type="messages",
+        value=state["chat_history"], type="messages", placeholder="Bomboclaat"
     )
     msg = gr.Textbox(
         label="Ask a question",
@@ -98,8 +120,7 @@ with gr.Blocks(title="Cogitoad") as gradio_app:
         lines=1,
     )
 
-    # Handle chat submission
-    msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).then(
+    msg.submit(user, [msg, chatbot], [msg, chatbot], queue=False).success(
         bot, chatbot, chatbot
     )
 
