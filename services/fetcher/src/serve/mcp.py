@@ -37,17 +37,17 @@ async def get_contents_from_document_bytes(filename: str, file_bytes: bytes):
     return await ocr.get_markdown_from_file_bytes(filename, file_bytes)
 
 
-@mcp.tool()
-async def search_web(query: str):
-    """Search the web.
-
-    Args:
-        query (str): The search query.
-
-    Returns:
-        dict: Dictionary containing the search results.
-    """
-    return await search_client.search(query, num_results=NUM_WEB_SEARCH_RESULTS)
+# @mcp.tool()
+# async def search_web(query: str):
+#     """Search the web.
+#
+#     Args:
+#         query (str): The search query.
+#
+#     Returns:
+#         dict: Dictionary containing the search results.
+#     """
+#     return await search_client.search(query, num_results=NUM_WEB_SEARCH_RESULTS)
 
 
 if __name__ == "__main__":
